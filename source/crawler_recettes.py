@@ -22,6 +22,7 @@ import json
 import time
 import logging
 import re
+import html
 from fractions import Fraction
 from typing import Optional
 
@@ -67,7 +68,8 @@ def fetch_page(url: str, session: requests.Session, retries: int = 3) -> Optiona
 # -------------------------------------------------------------------
 
 def clean_text(text: str) -> str:
-    """Nettoie un texte."""
+    """Nettoie un texte et décode les entités HTML (double passe pour les entités doublées)."""
+    text = html.unescape(html.unescape(text))
     return re.sub(r"\s+", " ", text).strip()
 
 
