@@ -588,10 +588,10 @@ def scrape_recipes(input_file: str, output_file: str, delay: float = 1.0):
 # -------------------------------------------------------------------
 
 # Fichier JSON contenant les URLs des recettes
-INPUT_FILE = "data/recettes_links_sample.json"
+INPUT_FILE = "data/recettes_links.json"
 
 # Fichier JSON de sortie
-OUTPUT_FILE = "data/recettes_details_sample.json"
+OUTPUT_FILE = "data/recettes_details.json"
 
 # Délai en secondes entre chaque requête
 DELAY = 1
