@@ -14,7 +14,6 @@ HEADERS = {
     "Accept-Language": "fr-FR,fr;q=0.9",
 }
 
-# Ta liste de catégories globales (ajoute tes nouvelles URLs ici)
 START_URLS = [
     "https://www.750g.com/categorie_accompagnements.htm",
     "https://www.750g.com/recettes-aperitifs/",
@@ -35,7 +34,14 @@ START_URLS = [
     "https://www.750g.com/recettes-entrees/",
 ]
 
+# Fichier de sortie
+OUTPUT_FILE = "data/recettes_links.json"
+
+# Délai entre les requêtes
+DELAY = 0.5
+
 RECIPE_PATTERN = re.compile(r"^https://www\.750g\.com/[a-z0-9\-]+-r\d+\.htm$")
+
 
 def fetch_page(url, session):
     try:
@@ -49,6 +55,7 @@ def fetch_page(url, session):
         logging.warning(f"❌ Erreur sur {url} : {e}")
         return None
 
+
 def extract_recipes_from_soup(soup):
     recipes = set()
     for a in soup.find_all("a", href=True):
@@ -59,6 +66,7 @@ def extract_recipes_from_soup(soup):
             recipes.add(href)
     return recipes
 
+
 def get_last_page(soup):
     last_page = 1
     for link in soup.find_all("a", href=re.compile(r"\?page=\d+")):
@@ -67,40 +75,40 @@ def get_last_page(soup):
             last_page = max(last_page, int(match.group(1)))
     return last_page
 
+
 def clean_pagination_url(base_url, page_num):
     if ".htm" in base_url:
         return f"{base_url}?page={page_num}"
-    return f"{base_url}/?page={page_num}" if not base_url.endswith("/") else f"{base_url}?page={page_num}"
+    return f"{base_url}?page={page_num}" if base_url.endswith("/") else f"{base_url}/?page={page_num}"
 
-def scrape_single_url(url, session, delay):
+
+def scrape_single_url(url, session):
     recipes_found = set()
-    
+
     logging.info(f"🌐 Lecture de la page source : {url}")
     soup = fetch_page(url, session)
     if not soup:
-        return []
+        return set()
 
-    # Étape 1 : On prend ce qu'il y a sur la première page
     initial_recipes = extract_recipes_from_soup(soup)
     recipes_found.update(initial_recipes)
     logging.info(f"   📈 +{len(initial_recipes)} recettes trouvées sur la page principale.")
 
     if len(recipes_found) >= 200:
-        return list(recipes_found)[:200]
+        return recipes_found
 
-    # Étape 2 : Pagination simple basée sur ce qui est visible
     last_page = get_last_page(soup)
-    
+
     if last_page > 1:
         logging.info(f"   📄 Pagination détectée ! {last_page} pages à faire.")
         for page_num in range(2, last_page + 1):
             if len(recipes_found) >= 200:
                 logging.info("   🛑 Quota de 200 recettes atteint. Arrêt.")
                 break
-                
+
             page_url = clean_pagination_url(url, page_num)
-            time.sleep(delay)
-            
+            time.sleep(DELAY)
+
             logging.info(f"   📄 Page pagination : {page_url}")
             soup_p = fetch_page(page_url, session)
             if soup_p:
@@ -111,33 +119,36 @@ def scrape_single_url(url, session, delay):
     else:
         logging.info("   🛑 Pas de pagination. Fin pour cette URL.")
 
-    return list(recipes_found)[:200]
+    return recipes_found
 
-def crawl_all(start_urls, output_path="recettes_links.json", delay=0.5):
+
+def crawl_all(start_urls, output_path=OUTPUT_FILE):
     session = requests.Session()
-    final_result = {}
-    total_global = 0
+
+    # Set global pour dédoublonner toutes catégories confondues
+    all_urls: set[str] = set()
 
     for idx, url in enumerate(start_urls, 1):
         logging.info(f"\n🔥 === DEBUT URL {idx}/{len(start_urls)} ===")
-        category_recipes = scrape_single_url(url, session, delay)
-        
-        final_result[url] = {
-            "count": len(category_recipes),
-            "recipes": category_recipes
-        }
-        total_global += len(category_recipes)
-        logging.info(f"🎯 Fin URL. {len(category_recipes)} recettes stockées.")
-        time.sleep(delay)
-        
-    output_data = {"total_global_recettes": total_global, "categories": final_result}
+        category_recipes = scrape_single_url(url, session)
+        new = category_recipes - all_urls
+        all_urls.update(new)
+        logging.info(f"🎯 +{len(new)} nouvelles. Total global : {len(all_urls)}")
+        time.sleep(DELAY)
+
+    # Format attendu par scraper_750g_details.py
+    output_data = {
+        "total": len(all_urls),
+        "all_recipe_urls": list(all_urls),
+    }
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
-    logging.info(f"\n✅ Terminé ! {total_global} URLs sauvegardées dans '{output_path}'")
+    logging.info(f"\n✅ Terminé ! {len(all_urls)} URLs sauvegardées dans '{output_path}'")
     return output_data
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s", datefmt="%H:%M:%S")
-    crawl_all(START_URLS, delay=0.5)
+    crawl_all(START_URLS)
