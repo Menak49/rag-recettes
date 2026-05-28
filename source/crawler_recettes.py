@@ -560,7 +560,7 @@ INPUT_FILE = "data/recettes_links.json"
 OUTPUT_FILE = "data/recettes_details.json"
 
 # Délai en secondes entre chaque requête
-DELAY = 0.1
+DELAY = 1
 
 
 if __name__ == "__main__":
