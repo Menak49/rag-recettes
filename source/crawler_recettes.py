@@ -5,12 +5,13 @@ Ce script :
 - Lit un fichier JSON contenant les URLs des recettes
 - Scrape les informations utiles :
     - titre
-    - ingrédients (quantités normalisées pour 1 personne)
+    - ingrédients
     - instructions (étapes de préparation)
     - difficulté
     - temps préparation
     - temps cuisson
     - matériel
+    - nb_personnes (nombre de personnes/pièces pour les quantités affichées)
     - url
 - Sauvegarde le tout dans un nouveau fichier JSON
 
@@ -23,7 +24,6 @@ import time
 import logging
 import re
 import html
-from fractions import Fraction
 from typing import Optional
 
 import requests
@@ -118,44 +118,45 @@ def is_valid_ingredient(text: str) -> bool:
 
 
 # -------------------------------------------------------------------
-# EXTRACTION DU NOMBRE DE PERSONNES
+# EXTRACTION DU NOMBRE DE PERSONNES / PIECES
 # -------------------------------------------------------------------
 
 SERVING_TYPE_PERSONS = "personnes"
 SERVING_TYPE_PIECES  = "pieces"
 SERVING_TYPE_UNKNOWN = None
 
+PIECES_KEYWORDS = [
+    "pièces?", "biscuits?", "cookies?", "muffins?", "cupcakes?",
+    "macarons?", "tartelettes?", "gâteaux?", "cakes?", "éclairs?",
+    "choux?", "cannelés?", "financiers?", "madeleines?", "brioches?",
+    "pains?", "petits pains?", "galettes?", "crêpes?", "pancakes?",
+    "verrines?", "bocaux?", "bocal",
+]
+PERSON_KEYWORDS = [
+    "personnes?", "portions?", "convives?",
+]
+
+
+def detect_serving_type(label: str) -> Optional[str]:
+    label_lower = label.lower()
+    for kw in PERSON_KEYWORDS:
+        if re.search(kw, label_lower):
+            return SERVING_TYPE_PERSONS
+    for kw in PIECES_KEYWORDS:
+        if re.search(kw, label_lower):
+            return SERVING_TYPE_PIECES
+    return SERVING_TYPE_UNKNOWN
+
 
 def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]:
     """
     Extrait le nombre de portions et leur type.
 
-    Retourne un tuple (valeur, type) :
-        (6, "personnes")  → recette pour 6 personnes  → on divise
-        (12, "pieces")    → recette pour 12 pièces     → on NE divise PAS (nb_personnes=null)
-        (None, None)      → rien trouvé                → on NE divise PAS (nb_personnes=null)
+    Retourne (valeur, type) :
+        (6, "personnes")  → recette pour 6 personnes
+        (12, "pieces")    → recette pour 12 pièces
+        (None, None)      → rien trouvé
     """
-
-    PIECES_KEYWORDS = [
-        "pièces?", "biscuits?", "cookies?", "muffins?", "cupcakes?",
-        "macarons?", "tartelettes?", "gâteaux?", "cakes?", "éclairs?",
-        "choux?", "cannelés?", "financiers?", "madeleines?", "brioches?",
-        "pains?", "petits pains?", "galettes?", "crêpes?", "pancakes?",
-        "verrines?", "bocaux?", "bocal",
-    ]
-    PERSON_KEYWORDS = [
-        "personnes?", "portions?", "convives?",
-    ]
-
-    def detect_type(label: str) -> Optional[str]:
-        label_lower = label.lower()
-        for kw in PERSON_KEYWORDS:
-            if re.search(kw, label_lower):
-                return SERVING_TYPE_PERSONS
-        for kw in PIECES_KEYWORDS:
-            if re.search(kw, label_lower):
-                return SERVING_TYPE_PIECES
-        return SERVING_TYPE_UNKNOWN
 
     # 1) JSON-LD schema.org (le plus fiable)
     for script in soup.find_all("script", type="application/ld+json"):
@@ -167,9 +168,7 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
             if recipe_yield:
                 m = re.search(r"(\d+)", recipe_yield)
                 if m:
-                    val = int(m.group(1))
-                    stype = detect_type(recipe_yield)
-                    return val, stype
+                    return int(m.group(1)), detect_serving_type(recipe_yield)
         except Exception:
             pass
 
@@ -184,9 +183,7 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
         text = c.get_text(" ", strip=True)
         m = re.search(r"(\d+)", text)
         if m:
-            val = int(m.group(1))
-            stype = detect_type(text)
-            return val, stype
+            return int(m.group(1)), detect_serving_type(text)
 
     # 3) Recherche textuelle dans la page entière
     text = soup.get_text(" ", strip=True)
@@ -210,77 +207,6 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
 
     logging.warning("Nombre de personnes/pièces introuvable.")
     return None, SERVING_TYPE_UNKNOWN
-
-
-# -------------------------------------------------------------------
-# NORMALISATION D'UNE QUANTITE VERS 1 PERSONNE
-# -------------------------------------------------------------------
-
-UNITS = r"(?:g|kg|cl|ml|l|c\.?\s*à\s*s\.?|c\.?\s*à\s*c\.?|pincées?|tours?|tranches?|sachets?|boîtes?|boites?|gousses?|branches?)"
-
-
-def parse_quantity_value(qty_str: str) -> Optional[float]:
-    """Convertit une chaîne de quantité en float."""
-    if not qty_str:
-        return None
-
-    s = qty_str.strip()
-
-    unicode_fractions = {
-        "½": 0.5, "⅓": 1/3, "¼": 0.25, "⅔": 2/3,
-        "¾": 0.75, "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875,
-    }
-    for uf, val in unicode_fractions.items():
-        s = s.replace(uf, f" {val} ")
-
-    s = s.replace(",", ".")
-
-    m = re.match(r"^(\d+)\s+(\d+)/(\d+)$", s.strip())
-    if m:
-        return int(m.group(1)) + int(m.group(2)) / int(m.group(3))
-
-    m = re.match(r"^(\d+)/(\d+)$", s.strip())
-    if m:
-        return int(m.group(1)) / int(m.group(2))
-
-    m = re.search(r"[\d.]+", s.strip())
-    if m:
-        try:
-            return float(m.group())
-        except ValueError:
-            pass
-
-    return None
-
-
-def format_quantity(value: float) -> str:
-    """Formate un float de façon lisible."""
-    if value == int(value):
-        return str(int(value))
-    rounded = round(value, 2)
-    return f"{rounded:g}"
-
-
-def normalize_quantity(qty_str: str, servings: Optional[int]) -> str:
-    """Divise la partie numérique d'une quantité par `servings`."""
-    if not qty_str or not servings or servings <= 1:
-        return qty_str
-
-    num_pattern = r"^((?:\d+\s+)?\d+[/.,]\d+|\d+[/.,]\d+|\d+)"
-    m = re.match(num_pattern, qty_str.strip())
-
-    if not m:
-        return qty_str
-
-    num_str = m.group(1)
-    rest = qty_str[m.end():]
-
-    value = parse_quantity_value(num_str)
-    if value is None:
-        return qty_str
-
-    new_value = value / servings
-    return format_quantity(new_value) + rest
 
 
 # -------------------------------------------------------------------
@@ -323,9 +249,9 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
     Extrait les étapes de préparation.
 
     Stratégie (par ordre de priorité) :
-    1. JSON-LD schema.org → recipeInstructions (le plus fiable)
-    2. HTML : balises ol > li sous la section "Préparation"
-    3. HTML : balises ol > li numérotées n'importe où dans la page
+    1. JSON-LD schema.org → recipeInstructions
+    2. HTML : ol > li sous la section "Préparation"
+    3. HTML : premier ol avec plusieurs li dans la page
     """
 
     # 1) JSON-LD
@@ -341,7 +267,6 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
                     if isinstance(item, str):
                         step = clean_text(item)
                     elif isinstance(item, dict):
-                        # HowToStep : champ "text"
                         step = clean_text(item.get("text", "") or item.get("name", ""))
                     else:
                         continue
@@ -352,7 +277,7 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
         except Exception:
             pass
 
-    # 2) HTML : chercher la section Préparation puis l'ol qui suit
+    # 2) HTML : section Préparation puis ol suivant
     prep_heading = None
     for tag in soup.find_all(["h2", "h3", "h4"]):
         if "préparation" in clean_text(tag.get_text()).lower():
@@ -360,17 +285,15 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
             break
 
     if prep_heading:
-        # Chercher le premier ol après le heading
         for sibling in prep_heading.find_next_siblings():
             if sibling.name == "ol":
                 steps = _extract_steps_from_ol(sibling)
                 if steps:
                     return steps
-            # On s'arrête si on tombe sur un autre heading de même niveau
             if sibling.name in ["h2", "h3", "h4"]:
                 break
 
-    # 3) HTML : fallback — premier ol avec plusieurs li dans la page
+    # 3) Fallback : premier ol avec au moins 2 li
     for ol in soup.find_all("ol"):
         steps = _extract_steps_from_ol(ol)
         if len(steps) >= 2:
@@ -384,16 +307,11 @@ def _extract_steps_from_ol(ol_tag) -> list[str]:
     steps = []
     for li in ol_tag.find_all("li", recursive=False):
         text = clean_text(li.get_text(" ", strip=True))
-
-        # Supprimer le numéro en tête s'il y en a un ("1 Dans le bol...")
         text = re.sub(r"^\d+\s+", "", text)
-
-        # Filtres parasites
         if not text or len(text) < 10:
             continue
         if any(kw in text.lower() for kw in ["connexion", "inscription", "acheter"]):
             continue
-
         steps.append(text)
     return steps
 
@@ -402,12 +320,8 @@ def _extract_steps_from_ol(ol_tag) -> list[str]:
 # INGREDIENTS
 # -------------------------------------------------------------------
 
-def extract_ingredients(soup: BeautifulSoup, servings: Optional[int]) -> list[dict]:
-    """
-    Extrait les ingrédients et quantités.
-    Si servings est None ou <= 1 : quantités conservées telles quelles.
-    Sinon : quantités normalisées pour 1 personne.
-    """
+def extract_ingredients(soup: BeautifulSoup) -> list[dict]:
+    """Extrait les ingrédients et quantités tels qu'affichés sur la page."""
     ingredients = []
 
     ingredient_blocks = soup.find_all(
@@ -432,7 +346,7 @@ def extract_ingredients(soup: BeautifulSoup, servings: Optional[int]) -> list[di
         )
 
         if match:
-            quantity = clean_text(match.group(1) or "")
+            quantity   = clean_text(match.group(1) or "")
             ingredient = clean_text(match.group(2))
 
             ingredient = re.sub(r"^(de|d'|du|des)\s+", "", ingredient, flags=re.IGNORECASE)
@@ -440,15 +354,14 @@ def extract_ingredients(soup: BeautifulSoup, servings: Optional[int]) -> list[di
             ingredient = ingredient.replace(". à s.", "").strip()
 
             if ingredient:
-                normalized_qty = normalize_quantity(quantity, servings)
                 ingredients.append({
                     "ingredient": ingredient,
-                    "quantite": normalized_qty,
+                    "quantite": quantity,
                 })
 
     # dédoublonnage
     unique = []
-    seen = set()
+    seen   = set()
     for ing in ingredients:
         key = (ing["ingredient"], ing["quantite"])
         if key not in seen:
@@ -465,7 +378,7 @@ def extract_ingredients(soup: BeautifulSoup, servings: Optional[int]) -> list[di
 def extract_materials(soup: BeautifulSoup) -> list[str]:
     materials = []
 
-    headings = soup.find_all(["h2", "h3", "h4", "p", "div", "span"])
+    headings         = soup.find_all(["h2", "h3", "h4", "p", "div", "span"])
     material_section = None
 
     for h in headings:
@@ -481,9 +394,7 @@ def extract_materials(soup: BeautifulSoup) -> list[str]:
     if not container:
         return []
 
-    candidates = container.find_all(["li", "span", "div"])
-
-    for c in candidates:
+    for c in container.find_all(["li", "span", "div"]):
         text = clean_text(c.get_text(" ", strip=True))
         if not text:
             continue
@@ -510,35 +421,26 @@ def extract_materials(soup: BeautifulSoup) -> list[str]:
 # -------------------------------------------------------------------
 
 def parse_recipe(url: str, soup: BeautifulSoup) -> dict:
-    """Parse une recette complète, quantités normalisées pour 1 personne."""
+    """Parse une recette complète."""
 
     title = None
-    h1 = soup.find("h1")
+    h1    = soup.find("h1")
     if h1:
         title = clean_text(h1.get_text())
 
     servings_count, servings_type = extract_servings(soup)
-    divisor = servings_count if servings_type == SERVING_TYPE_PERSONS else None
-
-    ingredients  = extract_ingredients(soup, divisor)
-    instructions = extract_instructions(soup)
-    prep_time    = extract_time(soup, "préparation")
-    cook_time    = extract_time(soup, "cuisson")
-    difficulty   = extract_difficulty(soup)
-    materials    = extract_materials(soup)
-
-    nb_personnes = servings_count if servings_type == SERVING_TYPE_PERSONS else None
 
     return {
-        "url": url,
-        "titre": title,
-        "difficulte": difficulty,
-        "temps_preparation": prep_time,
-        "temps_cuisson": cook_time,
-        "nb_personnes": nb_personnes,
-        "materiel": materials,
-        "ingredients": ingredients,
-        "instructions": instructions,
+        "url":               url,
+        "titre":             title,
+        "difficulte":        extract_difficulty(soup),
+        "temps_preparation": extract_time(soup, "préparation"),
+        "temps_cuisson":     extract_time(soup, "cuisson"),
+        "nb_personnes":      servings_count,   # null si introuvable
+        "type_quantite":     servings_type,    # "personnes", "pieces" ou null
+        "materiel":          extract_materials(soup),
+        "ingredients":       extract_ingredients(soup),
+        "instructions":      extract_instructions(soup),
     }
 
 
@@ -571,8 +473,7 @@ def scrape_recipes(input_file: str, output_file: str, delay: float = 1.0):
         if soup is None:
             continue
         try:
-            recipe_data = parse_recipe(url, soup)
-            results.append(recipe_data)
+            results.append(parse_recipe(url, soup))
         except Exception as e:
             logging.error(f"Erreur parsing {url} : {e}")
         time.sleep(delay)
@@ -587,15 +488,9 @@ def scrape_recipes(input_file: str, output_file: str, delay: float = 1.0):
 # ENTRYPOINT
 # -------------------------------------------------------------------
 
-# Fichier JSON contenant les URLs des recettes
 INPUT_FILE = "data/recettes_links.json"
-
-# Fichier JSON de sortie
 OUTPUT_FILE = "data/recettes_details.json"
-
-# Délai en secondes entre chaque requête
 DELAY = 1
-
 
 if __name__ == "__main__":
 
