@@ -1,11 +1,21 @@
 import streamlit as st
+from pathlib import Path
 
 # Import de la fonction d'initialisation depuis le moteur
 from rag_engine import init_rag_chain
 
+DOSSIER_COURANT = Path(__file__).parent
+chemin_image = DOSSIER_COURANT / "img" / "chefkiss.png"
+
 # Configuration de la page
-st.set_page_config(page_title="Duflan Recettes", page_icon="🍳")
-st.title("Duflan RAG 🍳")
+st.set_page_config(page_title="RAGoût Recettes", page_icon="👩‍🍳")
+col1, col2 = st.columns([1, 5])
+
+with col1:
+    # Ajustez le chemin de votre image et la largeur
+    st.image(str(chemin_image), use_container_width=True)
+with col2:
+    st.title("RAGoût")
 
 # Utilisation du cache Streamlit pour ne pas recharger les modèles à chaque clic
 @st.cache_resource
@@ -16,7 +26,7 @@ def load_application():
 rag_chain, retriever = load_application()
 
 # --- Interface Graphique ---
-st.markdown("Posez une question à votre assistant basé sur votre base de données de recettes.")
+st.markdown("Posez une question à votre assistant RAGoût basé sur une base de données de recettes.")
 
 question = st.text_input(
     "Votre question :", 
