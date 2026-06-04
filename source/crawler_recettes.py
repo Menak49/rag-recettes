@@ -376,45 +376,16 @@ def extract_ingredients(soup: BeautifulSoup) -> list[dict]:
 # -------------------------------------------------------------------
 
 def extract_materials(soup: BeautifulSoup) -> list[str]:
+    # Le nom de chaque ustensile est toujours dans un <span class="recipe-equipments-item-label">
+    labels = soup.find_all("span", class_="recipe-equipments-item-label")
+    
     materials = []
-
-    headings         = soup.find_all(["h2", "h3", "h4", "p", "div", "span"])
-    material_section = None
-
-    for h in headings:
-        text = clean_text(h.get_text(" ", strip=True)).lower()
-        if "matériel" in text or "ustensiles" in text or "équipement" in text:
-            material_section = h
-            break
-
-    if not material_section:
-        return []
-
-    container = material_section.find_parent()
-    if not container:
-        return []
-
-    for c in container.find_all(["li", "span", "div"]):
-        text = clean_text(c.get_text(" ", strip=True))
-        if not text:
-            continue
-        lower = text.lower()
-        if any(x in lower for x in [
-            "connexion", "inscription", "acheter", "redirigé",
-            "site externe", "personnes", "plus icon", "less icon"
-        ]):
-            continue
-        if len(text) > 40:
-            continue
-        if any(tool in lower for tool in [
-            "saladier", "casserole", "four", "poêle", "mixeur",
-            "fouet", "maryse", "spatule", "airfryer", "cookeo",
-            "bol", "torchon", "plaque", "moule", "presse"
-        ]):
-            materials.append(text)
-
+    for span in labels:
+        name = clean_text(span.get_text(" ", strip=True))
+        if name and len(name) >= 2:
+            materials.append(name)
+    
     return list(dict.fromkeys(materials))
-
 
 # -------------------------------------------------------------------
 # PARSE RECIPE
