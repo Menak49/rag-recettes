@@ -1,74 +1,49 @@
-from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.prompts import PromptTemplate
+import os
+from dotenv import load_dotenv
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_community.vectorstores import Chroma
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-reformulation_prompt = PromptTemplate.from_template("""Reformule la question suivante en une question autonome et complète,
-en utilisant l'historique de conversation si nécessaire.
-Si la question est déjà claire sans contexte, retourne-la telle quelle.
-Retourne UNIQUEMENT la question reformulée, en 10 mots maximum, sans explication.
+# Import de la fonction du fichier prompts.py
+from prompts import get_rag_prompt
 
-Historique:
-{chat_history}
+# Chargement du fichier .env situé à la racine du projet
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-Question: {question}
-
-Question reformulée:""")
-
-answer_prompt = PromptTemplate.from_template("""Tu es un assistant culinaire expert. Réponds à la question en te basant sur le contexte fourni.
-Si le contexte ne contient pas la réponse, utilise tes connaissances générales en cuisine.
-Sois précis, chaleureux et pratique dans tes réponses.
-
-Historique de conversation:
-{chat_history}
-
-Contexte (extraits de recettes):
-{context}
-
-Question: {question}
-
-Réponse:""")
-
-
-def chat(question: str, llm, retriever, chat_history: list) -> str:
-    history_str = "\n".join([
-        f"Humain: {m.content}" if isinstance(m, HumanMessage) else f"Assistant: {m.content}"
-        for m in chat_history
-    ])
-
-    # Reformulation si historique existant
-    if chat_history:
-        standalone_question = (llm | StrOutputParser()).invoke(
-            reformulation_prompt.invoke({"question": question, "chat_history": history_str})
-        )
-        standalone_question = standalone_question.strip()[:200]
-        print(f"Question reformulée : {standalone_question}")
-    else:
-        standalone_question = question
-
-    # Retrieval
-    retrieved_docs = retriever.invoke(standalone_question)
-    context = "\n\n".join(doc.page_content for doc in retrieved_docs)
-
-    # Génération de la réponse
-    answer = (llm | StrOutputParser()).invoke(
-        answer_prompt.invoke({
-            "question": question,
-            "context": context,
-            "chat_history": history_str
-        })
-    )
-
-    return answer
-
+def format_docs(docs):
+    """Combine le contenu des documents trouvés en une seule chaîne de caractères."""
+    return "\n\n".join(doc.page_content for doc in docs)
 
 def init_rag_chain():
-    from langchain_openai import ChatOpenAI
-    from langchain_community.vectorstores import FAISS
-    from langchain_openai import OpenAIEmbeddings
-
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-
-    return llm, retriever
+    """Initialise les composants et retourne la chaîne RAG et le retriever."""
+    
+    # 1. Configuration des embeddings
+    gemini_embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+    
+    # 2. Connexion à la base Chroma locale
+    # Le chemin remonte d'un cran par rapport à 'src/' pour trouver 'chroma_db/'
+    chroma_path = os.path.join(os.path.dirname(__file__), "chroma_db")
+    vectorstore_disk = Chroma(
+        persist_directory=chroma_path,
+        embedding_function=gemini_embeddings
+    )
+    
+    # Configuration du retriever
+    retriever = vectorstore_disk.as_retriever(search_kwargs={"k": 6})
+    
+    # 3. Initialisation du LLM
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+    
+    # 4. Récupération du prompt
+    llm_prompt = get_rag_prompt()
+    
+    # 5. Construction de la chaîne LCEL
+    rag_chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | llm_prompt
+        | llm
+        | StrOutputParser()
+    )
+    
+    return rag_chain, retriever
