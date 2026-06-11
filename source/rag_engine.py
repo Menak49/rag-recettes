@@ -79,7 +79,28 @@ class RelativeThresholdRetriever:
                 print("-----")
 
         return docs_filtres
+
+
+
+def generate_hypothetical_document(question: str, llm) -> str:
+    """
+    HyDE : génère une recette hypothétique qui répond à la question.
+    C'est ce document fictif qu'on va embedder, pas la question brute.
+    """
+    hyde_prompt = PromptTemplate.from_template("""Tu es un chef cuisinier. 
+Génère une courte recette fictive (titre + ingrédients + 3-4 étapes) qui correspond exactement à cette demande.
+Respecte ABSOLUMENT toutes les contraintes mentionnées (sans four, temps limité, ingrédients disponibles...).
+Réponds uniquement avec la recette, sans intro ni explication.
+
+Demande : {question}
+Recette :""")
     
+    from langchain_core.output_parsers import StrOutputParser
+    return (llm | StrOutputParser()).invoke(
+        hyde_prompt.invoke({"question": question})
+    ).strip()
+
+
 def init_rag_chain():
     """Initialise et retourne le llm et le retriever."""
 
