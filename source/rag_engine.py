@@ -9,9 +9,77 @@ from prompts import get_rag_prompt, get_reformulation_prompt
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
+K_RETRIEVAL = 6
+SEUIL_RELATIF = 0.01
+AFFICHER_SCORES_RETRIEVAL = True # Permet d'afficher les scores et les documents gardés dans le terminal.
+
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
+class RelativeThresholdRetriever:
+    """
+    Retriever personnalisé basé sur un seuil relatif.
+
+    Au lieu de garder toujours exactement k documents, on récupère d'abord
+    K_RETRIEVAL documents avec leurs scores, puis on garde uniquement ceux
+    qui sont proches du meilleur score.
+
+    Cela évite de donner au LLM des documents peu pertinents juste parce qu'il
+    faut remplir un top-k fixe.
+    """
+
+    def __init__(
+        self,
+        vectorstore,
+        k: int = K_RETRIEVAL,
+        seuil_relatif: float = SEUIL_RELATIF,
+        afficher_scores: bool = AFFICHER_SCORES_RETRIEVAL,
+    ):
+        self.vectorstore = vectorstore
+        self.k = k
+        self.seuil_relatif = seuil_relatif
+        self.afficher_scores = afficher_scores
+
+    def invoke(self, query: str):
+        """
+        Rend le retriever compatible avec le reste du projet.
+
+        evaluation.py et chat() appellent déjà retriever.invoke(question),
+        donc on garde cette interface.
+        """
+        docs_scores = self.vectorstore.similarity_search_with_relevance_scores(
+            query,
+            k=self.k,
+        )
+
+        if not docs_scores:
+            return []
+
+        meilleur_score = docs_scores[0][1]
+        score_minimum = meilleur_score - self.seuil_relatif
+
+        docs_filtres = [
+            doc
+            for doc, score in docs_scores
+            if score >= score_minimum
+        ]
+
+        if self.afficher_scores:
+            print("\n=== Scores du retrieval ===")
+            print(f"Question : {query}")
+            print(f"Meilleur score : {meilleur_score:.4f}")
+            print(f"Seuil minimum gardé : {score_minimum:.4f}")
+            print(f"Documents gardés : {len(docs_filtres)}/{len(docs_scores)}")
+
+            for i, (doc, score) in enumerate(docs_scores, start=1):
+                statut = "GARDÉ" if score >= score_minimum else "REJETÉ"
+                extrait = doc.page_content[:200].replace("\n", " ")
+                print(f"Doc {i} | score={score:.4f} | {statut}")
+                print(extrait)
+                print("-----")
+
+        return docs_filtres
+    
 def init_rag_chain():
     """Initialise et retourne le llm et le retriever."""
 
@@ -23,7 +91,17 @@ def init_rag_chain():
         embedding_function=gemini_embeddings
     )
 
-    retriever = vectorstore_disk.as_retriever(search_kwargs={"k": 6})
+    # Ancienne version :
+    # retriever = vectorstore_disk.as_retriever(search_kwargs={"k": 6})
+    #
+    # Nouvelle version :
+    # on utilise un retriever personnalisé qui applique le seuil relatif.
+    retriever = RelativeThresholdRetriever(
+        vectorstore=vectorstore_disk,
+        k=K_RETRIEVAL,
+        seuil_relatif=SEUIL_RELATIF,
+        afficher_scores=AFFICHER_SCORES_RETRIEVAL,
+    )
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     return llm, retriever

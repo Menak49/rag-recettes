@@ -28,9 +28,9 @@ La démo se trouve dans le dossier `Docs/Demo.mp4`
 ```
 
 ### Lancement du moteur en local: 
-Pour lancer le RAG en local :
+Pour lancer le RAG en local dans le dossier source:
 ```bash
-    python app.py
+    python streamlit run app.py
 ```
 
 ### Version déployée: 
