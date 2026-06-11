@@ -47,7 +47,7 @@ if question:
 
     with st.spinner("Recherche et mijotage en cours..."):
         try:
-            reponse = chat(
+            result = chat(
                 question=question,
                 llm=llm,
                 retriever=retriever,
@@ -70,6 +70,7 @@ if question:
         st.stop()
 
     # --- Suite normale si aucune erreur n'a été levée ---
+    reponse = result["answer"]
 
     # Affichage de la réponse si tout s'est bien passé
     with st.chat_message("assistant"):
@@ -79,13 +80,10 @@ if question:
     st.session_state.chat_history.append(HumanMessage(content=question))
     st.session_state.chat_history.append(AIMessage(content=reponse))
 
-    with st.expander("Voir les extraits de recettes utilisés (Contexte)"):
-        # Attention : le retriever peut aussi crasher si la question seule dépasse la limite, 
-        # mais c'est généralement le LLM avec tout l'historique qui bloque en premier.
-        try:
-            sources = retriever.invoke(question)
-            for i, doc in enumerate(sources):
-                st.markdown(f"**Extrait {i+1} :**")
-                st.info(doc.page_content)
-        except Exception:
-            st.warning("Impossible de récupérer les sources pour le moment.")
+    with st.expander("🔍 Détails du retrieval"):
+        st.markdown("**Question utilisée pour la recherche :**")
+        st.info(result["standalone_question"])
+        st.markdown("**Extraits de recettes utilisés (Contexte) :**")
+        for i, doc in enumerate(result["retrieved_docs"]):
+            st.markdown(f"**Extrait {i+1} :**")
+            st.info(doc.page_content)

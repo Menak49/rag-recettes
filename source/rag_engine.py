@@ -4,7 +4,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGener
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.prompts import PromptTemplate
+
 from prompts import get_rag_prompt, get_reformulation_prompt
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -79,28 +79,7 @@ class RelativeThresholdRetriever:
                 print("-----")
 
         return docs_filtres
-
-
-
-def generate_hypothetical_document(question: str, llm) -> str:
-    """
-    HyDE : génère une recette hypothétique qui répond à la question.
-    C'est ce document fictif qu'on va embedder, pas la question brute.
-    """
-    hyde_prompt = PromptTemplate.from_template("""Tu es un chef cuisinier. 
-Génère une courte recette fictive (titre + ingrédients + 3-4 étapes) qui correspond exactement à cette demande.
-Respecte ABSOLUMENT toutes les contraintes mentionnées (sans four, temps limité, ingrédients disponibles...).
-Réponds uniquement avec la recette, sans intro ni explication.
-
-Demande : {question}
-Recette :""")
     
-    from langchain_core.output_parsers import StrOutputParser
-    return (llm | StrOutputParser()).invoke(
-        hyde_prompt.invoke({"question": question})
-    ).strip()
-
-
 def init_rag_chain():
     """Initialise et retourne le llm et le retriever."""
 
@@ -151,9 +130,7 @@ def chat(question: str, llm, retriever, chat_history: list) -> str:
         standalone_question = question
 
     # Retrieval
-    hypothetical_doc = generate_hypothetical_document(standalone_question, llm)
-    print(f"Document hypothétique : {hypothetical_doc[:200]}")  # debug
-    retrieved_docs = retriever.invoke(hypothetical_doc)
+    retrieved_docs = retriever.invoke(standalone_question)
     context = format_docs(retrieved_docs)
 
     # Génération de la réponse
@@ -165,4 +142,8 @@ def chat(question: str, llm, retriever, chat_history: list) -> str:
         })
     )
 
-    return answer
+    return {
+        "answer": answer,
+        "standalone_question": standalone_question,
+        "retrieved_docs": retrieved_docs,
+    }
