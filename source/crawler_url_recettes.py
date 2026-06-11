@@ -34,10 +34,10 @@ START_URLS = [
     # "https://www.750g.com/recettes-entrees/",
 ]
 
-# Fichier de sortie
+# fichier de sortie
 OUTPUT_FILE = "data/recettes_links.json"
 
-# Délai entre les requêtes
+# délai entre les requêtes
 DELAY = 0.5
 
 RECIPE_PATTERN = re.compile(r"^https://www\.750g\.com/[a-z0-9\-]+-r\d+\.htm$")
@@ -47,12 +47,12 @@ def fetch_page(url, session):
     try:
         r = session.get(url, headers=HEADERS, timeout=10)
         if r.status_code == 404:
-            logging.warning(f"⚠️ Page introuvable (404) : {url}")
+            logging.warning(f"Page introuvable (404) : {url}")
             return None
         r.raise_for_status()
         return BeautifulSoup(r.text, "html.parser")
     except requests.RequestException as e:
-        logging.warning(f"❌ Erreur sur {url} : {e}")
+        logging.warning(f"Erreur sur {url} : {e}")
         return None
 
 
@@ -85,14 +85,14 @@ def clean_pagination_url(base_url, page_num):
 def scrape_single_url(url, session):
     recipes_found = set()
 
-    logging.info(f"🌐 Lecture de la page source : {url}")
+    logging.info(f"Lecture de la page source : {url}")
     soup = fetch_page(url, session)
     if not soup:
         return set()
 
     initial_recipes = extract_recipes_from_soup(soup)
     recipes_found.update(initial_recipes)
-    logging.info(f"   📈 +{len(initial_recipes)} recettes trouvées sur la page principale.")
+    logging.info(f"   {len(initial_recipes)} recettes trouvées sur la page principale.")
 
     if len(recipes_found) >= 200:
         return recipes_found
@@ -100,24 +100,24 @@ def scrape_single_url(url, session):
     last_page = get_last_page(soup)
 
     if last_page > 1:
-        logging.info(f"   📄 Pagination détectée ! {last_page} pages à faire.")
+        logging.info(f"   Pagination détectée ! {last_page} pages à faire.")
         for page_num in range(2, last_page + 1):
             if len(recipes_found) >= 200:
-                logging.info("   🛑 Quota de 200 recettes atteint. Arrêt.")
+                logging.info("   Quota de 200 recettes atteint. Arrêt.")
                 break
 
             page_url = clean_pagination_url(url, page_num)
             time.sleep(DELAY)
 
-            logging.info(f"   📄 Page pagination : {page_url}")
+            logging.info(f"   Page pagination : {page_url}")
             soup_p = fetch_page(page_url, session)
             if soup_p:
                 p_recipes = extract_recipes_from_soup(soup_p)
                 p_new = p_recipes - recipes_found
                 recipes_found.update(p_new)
-                logging.info(f"   📈 +{len(p_new)} nouvelles recettes. Total: {len(recipes_found)}")
+                logging.info(f"   {len(p_new)} nouvelles recettes. Total: {len(recipes_found)}")
     else:
-        logging.info("   🛑 Pas de pagination. Fin pour cette URL.")
+        logging.info("   Pas de pagination. Fin pour cette URL.")
 
     return recipes_found
 
@@ -129,11 +129,11 @@ def crawl_all(start_urls, output_path=OUTPUT_FILE):
     all_urls: set[str] = set()
 
     for idx, url in enumerate(start_urls, 1):
-        logging.info(f"\n🔥 === DEBUT URL {idx}/{len(start_urls)} ===")
+        logging.info(f"\n === DEBUT URL {idx}/{len(start_urls)} ===")
         category_recipes = scrape_single_url(url, session)
         new = category_recipes - all_urls
         all_urls.update(new)
-        logging.info(f"🎯 +{len(new)} nouvelles. Total global : {len(all_urls)}")
+        logging.info(f"{len(new)} nouvelles. Total global : {len(all_urls)}")
         time.sleep(DELAY)
 
     # Format attendu par scraper_750g_details.py
@@ -145,7 +145,7 @@ def crawl_all(start_urls, output_path=OUTPUT_FILE):
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(output_data, f, ensure_ascii=False, indent=2)
 
-    logging.info(f"\n✅ Terminé ! {len(all_urls)} URLs sauvegardées dans '{output_path}'")
+    logging.info(f"\nTerminé ! {len(all_urls)} URLs sauvegardées dans '{output_path}'")
     return output_data
 
 
