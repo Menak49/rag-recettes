@@ -13,15 +13,12 @@ from ragas.metrics import (
     context_precision,
 )
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-# google.api_core n'est pas toujours installé en standalone ; on essaie de
-# l'importer et on replie sur une détection par message d'erreur si absent.
 try:
     from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, InternalServerError as GoogleInternalServerError
     RETRYABLE_EXCEPTIONS = (ResourceExhausted, ServiceUnavailable, GoogleInternalServerError)
 except ModuleNotFoundError:
     # Fallback : on attrape toutes les exceptions dont le message contient les
-    # codes HTTP typiques des rate-limits Gemini (429, 500, 503).
-    RETRYABLE_EXCEPTIONS = ()   # redéfini juste en dessous via la fonction
+    RETRYABLE_EXCEPTIONS = () 
 
 # Import de tes fonctions
 from rag_engine import init_rag_chain, format_docs
@@ -31,19 +28,13 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Exponential backoff
-# ---------------------------------------------------------------------------
-
-# Import du wrapper LangChain pour Gemini — toujours disponible si
-# langchain-google-genai est installé.
 try:
     from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
     _LANGCHAIN_GENAI_ERROR = ChatGoogleGenerativeAIError
 except ImportError:
     _LANGCHAIN_GENAI_ERROR = None
 
-# Mots-clés présents dans les messages d'erreur Gemini (rate-limit / serveur)
 _RETRYABLE_KEYWORDS = (
     "429", "quota", "resource_exhausted", "resource exhausted",
     "503", "500", "unavailable", "internal server error", "rate limit",
@@ -56,13 +47,10 @@ _RETRY_DELAY_RE = _re.compile(r"retryDelay['\"]?\s*:\s*['\"]?(\d+(?:\.\d+)?)\s*s
 
 def _is_retryable(exc: Exception) -> bool:
     """Retourne True si l'exception est une erreur transitoire Gemini."""
-    # 1. ChatGoogleGenerativeAIError (wrapper LangChain) — couvre le cas observé
     if _LANGCHAIN_GENAI_ERROR and isinstance(exc, _LANGCHAIN_GENAI_ERROR):
         return True
-    # 2. Types google.api_core si disponibles
     if RETRYABLE_EXCEPTIONS and isinstance(exc, RETRYABLE_EXCEPTIONS):
         return True
-    # 3. Fallback textuel universel
     msg = str(exc).lower()
     return any(kw in msg for kw in _RETRYABLE_KEYWORDS)
 
@@ -74,7 +62,7 @@ def _extract_retry_delay(exc: Exception) -> float | None:
     """
     m = _RETRY_DELAY_RE.search(str(exc))
     if m:
-        return float(m.group(1)) + 2.0   # +2 s de marge de sécurité
+        return float(m.group(1)) + 2.0 
     return None
 
 
@@ -129,11 +117,6 @@ def call_with_backoff(fn, *args, max_retries: int = 8, base_delay: float = 30.0,
 
             time.sleep(delay)
 
-
-# ---------------------------------------------------------------------------
-# Wrapper Ragas : on surcharge les appels LLM internes avec le backoff
-# ---------------------------------------------------------------------------
-
 class BackoffChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
     """
     Sous-classe de ChatGoogleGenerativeAI qui applique automatiquement
@@ -147,9 +130,7 @@ class BackoffChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
         return call_with_backoff(super()._generate, *args, **kwargs)
 
 
-# ---------------------------------------------------------------------------
 # Dataset de test
-# ---------------------------------------------------------------------------
 
 EVAL_SET = [
     # Questions de Charlotte
@@ -165,25 +146,25 @@ EVAL_SET = [
     #         "uniquement à la poêle ou à la casserole."
     #     ),
     # },
-    {
-        "question": "J'ai 20 minutes, des tomates et je veux faire une recette italienne.",
-        "ground_truth": (
-            "En 20 minutes avec des tomates et une inspiration italienne, vous pouvez réaliser "
-            "une salade de pâtes comme en Italie : faites cuire des pâtes al dente, puis mélangez-les "
-            "avec des tomates fraîches, de la mozzarella, des olives vertes, de l'huile d'olive et "
-            "de l'origan. Vous pouvez aussi préparer une salade de pâtes à l'avocat avec tomates "
-            "cerise, feta et olives, ou un gaspacho tomates-poivrons si vous préférez une entrée froide."
-        ),
-    },
     # {
-    #     "question": "Quels ingrédients faut-il pour faire une ratatouille ?",
+    #     "question": "J'ai 20 minutes, des tomates et je veux faire une recette italienne.",
     #     "ground_truth": (
-    #         "La recette présente dans la base est une ratatouille niçoise aux herbes de Provence. "
-    #         "Il faut : 4 aubergines, 4 courgettes, 2 poivrons, 500 g de tomates, 3 gros oignons, "
-    #         "2 gousses d'ail, 1 verre d'huile d'olive, 1 bouquet garni, du sel et du poivre. "
-    #         "Tous les légumes sont coupés en morceaux et mijotés en cocotte pendant 1 h à 1 h 30."
+    #         "En 20 minutes avec des tomates et une inspiration italienne, vous pouvez réaliser "
+    #         "une salade de pâtes comme en Italie : faites cuire des pâtes al dente, puis mélangez-les "
+    #         "avec des tomates fraîches, de la mozzarella, des olives vertes, de l'huile d'olive et "
+    #         "de l'origan. Vous pouvez aussi préparer une salade de pâtes à l'avocat avec tomates "
+    #         "cerise, feta et olives, ou un gaspacho tomates-poivrons si vous préférez une entrée froide."
     #     ),
     # },
+    {
+        "question": "Quels ingrédients faut-il pour faire une ratatouille ?",
+        "ground_truth": (
+            "La recette présente dans la base est une ratatouille niçoise aux herbes de Provence. "
+            "Il faut : 4 aubergines, 4 courgettes, 2 poivrons, 500 g de tomates, 3 gros oignons, "
+            "2 gousses d'ail, 1 verre d'huile d'olive, 1 bouquet garni, du sel et du poivre. "
+            "Tous les légumes sont coupés en morceaux et mijotés en cocotte pendant 1 h à 1 h 30."
+        ),
+    },
     # {
     #     "question": "J'ai que des pommes de terre et des oignons, que puis-je cuisiner ?",
     #     "ground_truth": (
@@ -310,10 +291,7 @@ EVAL_SET = [
     # },
 ]
 
-
-# ---------------------------------------------------------------------------
 # Génération RAG avec backoff
-# ---------------------------------------------------------------------------
 
 def generate_answer(llm, retriever, question: str) -> tuple[str, list[str]]:
     """Récupère les docs et génère une réponse. Chaque appel LLM passe par le backoff."""
@@ -335,10 +313,7 @@ def generate_answer(llm, retriever, question: str) -> tuple[str, list[str]]:
     return answer, [doc.page_content for doc in docs]
 
 
-# ---------------------------------------------------------------------------
 # Évaluation principale
-# ---------------------------------------------------------------------------
-
 def run_evaluation():
     logger.info("Initialisation de la chaîne RAG...")
     llm, retriever = init_rag_chain()
@@ -355,16 +330,12 @@ def run_evaluation():
         answer, contexts = generate_answer(llm, retriever, q)
         generated_answers.append(answer)
         retrieved_contexts.append(contexts)
-        # Pause de courtoisie entre chaque question pour ménager le quota free tier
-        # (uniquement si ce n'est pas la dernière question)
         if i < len(questions) - 1:
             pause = 15  # secondes — ajuste si nécessaire
             logger.info("Pause de %d s avant la prochaine question...", pause)
             time.sleep(pause)
 
-    # -----------------------------------------------------------------------
     # Préparation du dataset Ragas
-    # -----------------------------------------------------------------------
     dataset = Dataset.from_dict({
         "user_input":         questions,
         "response":           generated_answers,
@@ -374,7 +345,7 @@ def run_evaluation():
 
     # LLM et embeddings avec backoff intégré pour Ragas
     eval_llm = BackoffChatGoogleGenerativeAI(
-        model=llm.model,           # réutilise le même modèle que ton RAG
+        model=llm.model,          
         temperature=0,
     )
     eval_embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
@@ -394,10 +365,7 @@ def run_evaluation():
         embeddings=eval_embeddings,   
     )
 
-    # -----------------------------------------------------------------------
     # Affichage des résultats
-    # -----------------------------------------------------------------------
-
     df = result.to_pandas()
  
     metric_cols = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
