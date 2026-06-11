@@ -30,9 +30,6 @@ import requests
 from bs4 import BeautifulSoup
 
 
-# -------------------------------------------------------------------
-# CONFIG
-# -------------------------------------------------------------------
 
 HEADERS = {
     "User-Agent": (
@@ -44,9 +41,6 @@ HEADERS = {
 }
 
 
-# -------------------------------------------------------------------
-# FETCH
-# -------------------------------------------------------------------
 
 def fetch_page(url: str, session: requests.Session, retries: int = 3) -> Optional[BeautifulSoup]:
     """Télécharge une page et retourne BeautifulSoup."""
@@ -62,20 +56,12 @@ def fetch_page(url: str, session: requests.Session, retries: int = 3) -> Optiona
     logging.error(f"Impossible de récupérer : {url}")
     return None
 
-
-# -------------------------------------------------------------------
-# HELPERS
-# -------------------------------------------------------------------
-
 def clean_text(text: str) -> str:
     """Nettoie un texte et décode les entités HTML (double passe pour les entités doublées)."""
     text = html.unescape(html.unescape(text))
     return re.sub(r"\s+", " ", text).strip()
 
 
-# -------------------------------------------------------------------
-# FILTRES / PARASITES
-# -------------------------------------------------------------------
 
 PARASITE_MATERIALS = {
     "Acheter",
@@ -117,9 +103,6 @@ def is_valid_ingredient(text: str) -> bool:
     return True
 
 
-# -------------------------------------------------------------------
-# EXTRACTION DU NOMBRE DE PERSONNES / PIECES
-# -------------------------------------------------------------------
 
 SERVING_TYPE_PERSONS = "personnes"
 SERVING_TYPE_PIECES  = "pieces"
@@ -158,7 +141,7 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
         (None, None)      → rien trouvé
     """
 
-    # 1) JSON-LD schema.org (le plus fiable)
+    # jSON-LD schema.org (le plus fiable)
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(script.string or "")
@@ -172,7 +155,7 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
         except Exception:
             pass
 
-    # 2) Balises avec classe contenant "serving" / "person" / "portion"
+    # balises avec classe contenant "serving" / "person" / "portion"
     candidates = soup.find_all(
         lambda tag: any(
             kw in " ".join(tag.get("class", [])).lower()
@@ -185,7 +168,7 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
         if m:
             return int(m.group(1)), detect_serving_type(text)
 
-    # 3) Recherche textuelle dans la page entière
+    # recherche textuelle dans la page entière
     text = soup.get_text(" ", strip=True)
 
     typed_patterns = [
@@ -209,10 +192,6 @@ def extract_servings(soup: BeautifulSoup) -> tuple[Optional[int], Optional[str]]
     return None, SERVING_TYPE_UNKNOWN
 
 
-# -------------------------------------------------------------------
-# EXTRACTION TEMPS
-# -------------------------------------------------------------------
-
 def extract_time(soup: BeautifulSoup, keyword: str) -> Optional[str]:
     """Extrait un temps (préparation/cuisson)."""
     text = soup.get_text(" ", strip=True)
@@ -227,10 +206,6 @@ def extract_time(soup: BeautifulSoup, keyword: str) -> Optional[str]:
     return None
 
 
-# -------------------------------------------------------------------
-# DIFFICULTE
-# -------------------------------------------------------------------
-
 def extract_difficulty(soup: BeautifulSoup) -> Optional[str]:
     """Extrait la difficulté."""
     text = soup.get_text(" ", strip=True)
@@ -240,9 +215,6 @@ def extract_difficulty(soup: BeautifulSoup) -> Optional[str]:
     return None
 
 
-# -------------------------------------------------------------------
-# INSTRUCTIONS
-# -------------------------------------------------------------------
 
 def extract_instructions(soup: BeautifulSoup) -> list[str]:
     """
@@ -254,7 +226,7 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
     3. HTML : premier ol avec plusieurs li dans la page
     """
 
-    # 1) JSON-LD
+    # JSON-LD
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(script.string or "")
@@ -277,7 +249,7 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
         except Exception:
             pass
 
-    # 2) HTML : section Préparation puis ol suivant
+    # HTML : section Préparation puis ol suivant
     prep_heading = None
     for tag in soup.find_all(["h2", "h3", "h4"]):
         if "préparation" in clean_text(tag.get_text()).lower():
@@ -293,7 +265,7 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
             if sibling.name in ["h2", "h3", "h4"]:
                 break
 
-    # 3) Fallback : premier ol avec au moins 2 li
+    #  Fallback : premier ol avec au moins 2 li
     for ol in soup.find_all("ol"):
         steps = _extract_steps_from_ol(ol)
         if len(steps) >= 2:
@@ -315,10 +287,6 @@ def _extract_steps_from_ol(ol_tag) -> list[str]:
         steps.append(text)
     return steps
 
-
-# -------------------------------------------------------------------
-# INGREDIENTS
-# -------------------------------------------------------------------
 
 def extract_ingredients(soup: BeautifulSoup) -> list[dict]:
     """Extrait les ingrédients et quantités tels qu'affichés sur la page."""
@@ -371,10 +339,6 @@ def extract_ingredients(soup: BeautifulSoup) -> list[dict]:
     return unique
 
 
-# -------------------------------------------------------------------
-# MATERIEL
-# -------------------------------------------------------------------
-
 def extract_materials(soup: BeautifulSoup) -> list[str]:
     # Le nom de chaque ustensile est toujours dans un <span class="recipe-equipments-item-label">
     labels = soup.find_all("span", class_="recipe-equipments-item-label")
@@ -386,10 +350,6 @@ def extract_materials(soup: BeautifulSoup) -> list[str]:
             materials.append(name)
     
     return list(dict.fromkeys(materials))
-
-# -------------------------------------------------------------------
-# PARSE RECIPE
-# -------------------------------------------------------------------
 
 def parse_recipe(url: str, soup: BeautifulSoup) -> dict:
     """Parse une recette complète."""
@@ -415,9 +375,6 @@ def parse_recipe(url: str, soup: BeautifulSoup) -> dict:
     }
 
 
-# -------------------------------------------------------------------
-# LOAD URLS
-# -------------------------------------------------------------------
 
 def load_recipe_urls(input_file: str) -> list[str]:
     """Charge les URLs depuis le JSON."""
@@ -426,9 +383,6 @@ def load_recipe_urls(input_file: str) -> list[str]:
     return data.get("all_recipe_urls", [])
 
 
-# -------------------------------------------------------------------
-# MAIN SCRAPER
-# -------------------------------------------------------------------
 
 def scrape_recipes(input_file: str, output_file: str, delay: float = 1.0):
     """Scrape toutes les recettes."""
@@ -455,9 +409,7 @@ def scrape_recipes(input_file: str, output_file: str, delay: float = 1.0):
     logging.info(f"\n✅ {len(results)} recettes sauvegardées dans '{output_file}'")
 
 
-# -------------------------------------------------------------------
-# ENTRYPOINT
-# -------------------------------------------------------------------
+
 
 INPUT_FILE = "data/recettes_links.json"
 OUTPUT_FILE = "data/recettes_details.json"
