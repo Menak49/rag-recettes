@@ -4,7 +4,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGener
 from langchain_community.vectorstores import Chroma
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
-
+from langchain_core.prompts import PromptTemplate
 from prompts import get_rag_prompt, get_reformulation_prompt
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
