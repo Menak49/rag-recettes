@@ -151,7 +151,9 @@ def chat(question: str, llm, retriever, chat_history: list) -> str:
         standalone_question = question
 
     # Retrieval
-    retrieved_docs = retriever.invoke(standalone_question)
+    hypothetical_doc = generate_hypothetical_document(standalone_question, llm)
+    print(f"Document hypothétique : {hypothetical_doc[:200]}")  # debug
+    retrieved_docs = retriever.invoke(hypothetical_doc)
     context = format_docs(retrieved_docs)
 
     # Génération de la réponse
