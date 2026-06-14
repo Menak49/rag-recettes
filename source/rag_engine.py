@@ -9,24 +9,30 @@ from prompts import get_rag_prompt, get_reformulation_prompt
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-K_RETRIEVAL = 6
-SEUIL_RELATIF = 0.01
+K_RETRIEVAL = 8
+#SEUIL_RELATIF = 0.01
+MAX_DOCS_GARDES = 3
 AFFICHER_SCORES_RETRIEVAL = True # Permet d'afficher les scores et les documents gardés dans le terminal.
 
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
+docs_scores = vectorstore.similarity_search_with_relevance_scores(
+    query,
+    k=8
+)
+"""
 class RelativeThresholdRetriever:
-    """
-    Retriever personnalisé basé sur un seuil relatif.
+    
+    #Retriever personnalisé basé sur un seuil relatif.
 
-    Au lieu de garder toujours exactement k documents, on récupère d'abord
-    K_RETRIEVAL documents avec leurs scores, puis on garde uniquement ceux
-    qui sont proches du meilleur score.
+    #Au lieu de garder toujours exactement k documents, on récupère d'abord
+    #K_RETRIEVAL documents avec leurs scores, puis on garde uniquement ceux
+    #qui sont proches du meilleur score.
 
-    Cela évite de donner au LLM des documents peu pertinents juste parce qu'il
-    faut remplir un top-k fixe.
-    """
+    #Cela évite de donner au LLM des documents peu pertinents juste parce qu'il
+    #faut remplir un top-k fixe.
+    
 
     def __init__(
         self,
@@ -41,12 +47,12 @@ class RelativeThresholdRetriever:
         self.afficher_scores = afficher_scores
 
     def invoke(self, query: str):
-        """
-        Rend le retriever compatible avec le reste du projet.
+        
+        #Rend le retriever compatible avec le reste du projet.
 
-        evaluation.py et chat() appellent déjà retriever.invoke(question),
-        donc on garde cette interface.
-        """
+        #evaluation.py et chat() appellent déjà retriever.invoke(question),
+        #donc on garde cette interface.
+        
         docs_scores = self.vectorstore.similarity_search_with_relevance_scores(
             query,
             k=self.k,
@@ -79,7 +85,119 @@ class RelativeThresholdRetriever:
                 print("-----")
 
         return docs_filtres
-    
+"""
+class CRAGRetriever:
+    """
+    Retriever inspiré de CRAG.
+
+    Étape 1 : Chroma récupère plusieurs documents candidats avec une recherche vectorielle.
+    Étape 2 : un LLM joue le rôle de juge et garde uniquement les documents vraiment
+    pertinents par rapport à la question utilisateur.
+
+    Cette approche est plus coûteuse qu'un simple top-k ou qu'un seuil relatif,
+    mais elle réduit les faux positifs lorsque des recettes sont proches
+    sémantiquement sans répondre précisément à la demande.
+    """
+
+    def __init__(
+        self,
+        vectorstore,
+        llm,
+        k: int = K_RETRIEVAL,
+        max_docs_gardes: int = MAX_DOCS_GARDES,
+        afficher_scores: bool = AFFICHER_SCORES_RETRIEVAL,
+    ):
+        self.vectorstore = vectorstore
+        self.llm = llm
+        self.k = k
+        self.max_docs_gardes = max_docs_gardes
+        self.afficher_scores = afficher_scores
+
+    def _build_filter_prompt(self, query: str, docs):
+        docs_text = ""
+
+        for i, doc in enumerate(docs, start=1):
+            extrait = doc.page_content[:1200].replace("\n", " ")
+            docs_text += f"\nDOCUMENT {i}:\n{extrait}\n"
+
+        return f"""
+Tu es un évaluateur de pertinence pour un système RAG de recettes de cuisine.
+
+Question utilisateur :
+{query}
+
+Documents candidats récupérés par recherche vectorielle :
+{docs_text}
+
+Ta tâche :
+- garde uniquement les documents qui répondent vraiment à la demande utilisateur ;
+- rejette les documents seulement proches lexicalement ou sémantiquement mais non pertinents ;
+- si la question impose une contrainte, par exemple sans four, végétarien, rapide, poêle, etc., rejette les documents qui ne respectent pas cette contrainte ;
+- garde au maximum {self.max_docs_gardes} documents ;
+- réponds uniquement avec les numéros des documents à garder, séparés par des virgules ;
+- si aucun document n'est pertinent, réponds uniquement : AUCUN.
+
+Exemples de réponses valides :
+1,2
+3
+AUCUN
+"""
+
+    def _parse_llm_selection(self, response: str, nb_docs: int):
+        response = response.strip()
+
+        if "AUCUN" in response.upper():
+            return []
+
+        indices = []
+        for number in re.findall(r"\d+", response):
+            index = int(number)
+            if 1 <= index <= nb_docs and index not in indices:
+                indices.append(index)
+
+        return indices[:self.max_docs_gardes]
+
+    def invoke(self, query: str):
+        """
+        Rend le retriever compatible avec le reste du projet.
+
+        evaluation.py et chat() appellent déjà retriever.invoke(question),
+        donc on garde cette interface.
+        """
+        docs_scores = self.vectorstore.similarity_search_with_relevance_scores(
+            query,
+            k=self.k,
+        )
+
+        if not docs_scores:
+            return []
+
+        docs = [doc for doc, score in docs_scores]
+
+        filter_prompt = self._build_filter_prompt(query, docs)
+        llm_response = self.llm.invoke(filter_prompt).content.strip()
+        indices_gardes = self._parse_llm_selection(llm_response, len(docs))
+
+        docs_filtres = [
+            docs[index - 1]
+            for index in indices_gardes
+        ]
+
+        if self.afficher_scores:
+            print("\n=== Retrieval vectoriel + filtrage LLM ===")
+            print(f"Question : {query}")
+            print(f"Réponse du LLM filtre : {llm_response}")
+            print(f"Documents gardés : {len(docs_filtres)}/{len(docs_scores)}")
+
+            for i, (doc, score) in enumerate(docs_scores, start=1):
+                statut = "GARDÉ" if i in indices_gardes else "REJETÉ"
+                extrait = doc.page_content[:200].replace("\n", " ")
+                print(f"Doc {i} | score={score:.4f} | {statut}")
+                print(extrait)
+                print("-----")
+
+        return docs_filtres
+
 def init_rag_chain():
     """Initialise et retourne le llm et le retriever."""
 
@@ -96,13 +214,24 @@ def init_rag_chain():
     #
     # Nouvelle version :
     # on utilise un retriever personnalisé qui applique le seuil relatif.
+    """
     retriever = RelativeThresholdRetriever(
         vectorstore=vectorstore_disk,
         k=K_RETRIEVAL,
         seuil_relatif=SEUIL_RELATIF,
         afficher_scores=AFFICHER_SCORES_RETRIEVAL,
     )
+    """
     llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite")
+    # Version finale : approche inspirée de CRAG.
+    # On récupère plusieurs documents candidats, puis le LLM filtre les faux positifs.
+    retriever = CRAGRetriever(
+        vectorstore=vectorstore_disk,
+        llm=llm,
+        k=K_RETRIEVAL,
+        max_docs_gardes=MAX_DOCS_GARDES,
+        afficher_scores=AFFICHER_SCORES_RETRIEVAL,
+    )
 
     return llm, retriever
 
