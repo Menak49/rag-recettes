@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
@@ -171,7 +172,18 @@ AUCUN
         docs = [doc for doc, score in docs_scores]
 
         filter_prompt = self._build_filter_prompt(query, docs)
-        llm_response = self.llm.invoke(filter_prompt).content.strip()
+
+        llm_result = self.llm.invoke(filter_prompt)
+        llm_content = llm_result.content
+
+        if isinstance(llm_content, list):
+            llm_response = " ".join(
+                str(item.get("text", item)) if isinstance(item, dict) else str(item)
+                for item in llm_content
+            ).strip()
+        else:
+            llm_response = str(llm_content).strip()
+
         indices_gardes = self._parse_llm_selection(llm_response, len(docs))
 
         docs_filtres = [
