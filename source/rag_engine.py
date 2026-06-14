@@ -17,10 +17,6 @@ AFFICHER_SCORES_RETRIEVAL = True # Permet d'afficher les scores et les documents
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
-docs_scores = vectorstore.similarity_search_with_relevance_scores(
-    query,
-    k=8
-)
 """
 class RelativeThresholdRetriever:
     
