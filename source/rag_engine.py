@@ -285,5 +285,5 @@ def chat(question: str, llm, retriever, chat_history: list) -> str:
         "answer": answer,
         "standalone_question": standalone_question,
         "retrieved_docs": retrieved_docs,
-        "llm_filter_response": llm_response
+        "llm_filter_response": getattr(retriever, "last_llm_response", "Non disponible"),
     }
