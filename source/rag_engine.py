@@ -183,6 +183,7 @@ AUCUN
             ).strip()
         else:
             llm_response = str(llm_content).strip()
+            self.last_llm_response = llm_response
 
         indices_gardes = self._parse_llm_selection(llm_response, len(docs))
 
@@ -283,4 +284,5 @@ def chat(question: str, llm, retriever, chat_history: list) -> str:
         "answer": answer,
         "standalone_question": standalone_question,
         "retrieved_docs": retrieved_docs,
+        "llm_filter_response": llm_response
     }
