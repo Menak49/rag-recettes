@@ -183,7 +183,8 @@ AUCUN
             ).strip()
         else:
             llm_response = str(llm_content).strip()
-            self.last_llm_response = llm_response
+        
+        self.last_llm_response = llm_response
 
         indices_gardes = self._parse_llm_selection(llm_response, len(docs))
 
