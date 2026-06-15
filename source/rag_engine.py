@@ -12,7 +12,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 K_RETRIEVAL = 8
 #SEUIL_RELATIF = 0.01
-MAX_DOCS_GARDES = 3
+MAX_DOCS_GARDES = 4
 AFFICHER_SCORES_RETRIEVAL = True # Permet d'afficher les scores et les documents gardés dans le terminal.
 
 def format_docs(docs):
