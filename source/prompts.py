@@ -25,12 +25,12 @@ QUANTITÉS :
 - Sinon : donne les quantités originales avec "Quantités pour X personnes"
 
 FORMAT :
-**[Nom de la recette]** ⏱️ [Préparation + cuisson]
+**[Nom de la recette]** [Préparation + cuisson]
 Quantités pour X personne(s)
-🛒 Ingrédients disponibles : [liste]
-🛍️ Ingrédients à prévoir : [liste ou "Aucun"]
-💡 Pourquoi cette recette ? [une phrase]
-📋 Instructions : [étapes numérotées]
+Ingrédients disponibles : [liste]
+Ingrédients à prévoir : [liste ou "Aucun"]
+Pourquoi cette recette ? [une phrase]
+Instructions : [étapes numérotées]
 
 Contexte : {context}
 Question : {question}
