@@ -13,8 +13,9 @@ Nous avons choisi d’appliquer cette approche au domaine culinaire, en nous app
 corpus de recettes extraites du site web 750g.
 
 ### Rapport et Démo
-Le rapport se trouve dans le dossier `Docs/Rapport_de_Projet.pdf`
-La démo se trouve dans le dossier `Docs/Demo.mp4`
+Le rapport se trouve dans le dossier `Docs/Rapport/Rapport_de_Projet.pdf`
+Les slides se trouvent dans le dossier `Docs/Slides/Rapport_de_Projet.pdf`
+La démo se trouve dans le dossier `Docs/video_demo/videoDemoExplicative.mp4`
 
 ## Prérequis : 
 - Installer les requirements avec :
