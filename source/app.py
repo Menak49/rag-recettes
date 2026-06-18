@@ -57,22 +57,18 @@ if question:
             # On stocke l'erreur pour la traiter plus tard et laisser le spinner se fermer
             erreur_rencontree = e
 
-    # --- Gestion des erreurs en dehors du spinner ---
+    # Gestion des erreurs en dehors du spinner
     if erreur_rencontree:
         erreur_str = str(erreur_rencontree).lower()
         if "token" in erreur_str or "context length" in erreur_str or "limit" in erreur_str or "rate" in erreur_str:
             st.error("🥘 **La casserole déborde !** \n\nNotre assistant a atteint sa limite de tokens.")
         else:
-            # Si c'est une autre erreur (ex: problème de connexion)
             st.error(f"Une erreur inattendue a ruiné la recette : {erreur_rencontree}")
         
-        # On arrête le script ici de façon propre, sans bloquer l'interface
         st.stop()
 
-    # --- Suite normale si aucune erreur n'a été levée ---
     reponse = result["answer"]
 
-    # Affichage de la réponse si tout s'est bien passé
     with st.chat_message("assistant"):
         st.write(reponse)
 

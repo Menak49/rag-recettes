@@ -17,10 +17,8 @@ try:
     from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, InternalServerError as GoogleInternalServerError
     RETRYABLE_EXCEPTIONS = (ResourceExhausted, ServiceUnavailable, GoogleInternalServerError)
 except ModuleNotFoundError:
-    # Fallback : on attrape toutes les exceptions dont le message contient les
     RETRYABLE_EXCEPTIONS = () 
 
-# Import de tes fonctions
 from rag_engine import init_rag_chain, format_docs
 
 load_dotenv()
