@@ -226,7 +226,6 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
     3. HTML : premier ol avec plusieurs li dans la page
     """
 
-    # JSON-LD
     for script in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(script.string or "")
@@ -249,7 +248,7 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
         except Exception:
             pass
 
-    # HTML : section Préparation puis ol suivant
+    #  section préparation puis ol suivant
     prep_heading = None
     for tag in soup.find_all(["h2", "h3", "h4"]):
         if "préparation" in clean_text(tag.get_text()).lower():
@@ -265,7 +264,7 @@ def extract_instructions(soup: BeautifulSoup) -> list[str]:
             if sibling.name in ["h2", "h3", "h4"]:
                 break
 
-    #  Fallback : premier ol avec au moins 2 li
+    #  fallback  premier ol avec au moins 2 li
     for ol in soup.find_all("ol"):
         steps = _extract_steps_from_ol(ol)
         if len(steps) >= 2:
@@ -406,7 +405,7 @@ def scrape_recipes(input_file: str, output_file: str, delay: float = 1.0):
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
-    logging.info(f"\n✅ {len(results)} recettes sauvegardées dans '{output_file}'")
+    logging.info(f"\n{len(results)} recettes sauvegardées dans '{output_file}'")
 
 
 

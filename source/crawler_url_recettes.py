@@ -16,22 +16,22 @@ HEADERS = {
 
 START_URLS = [
     "https://www.750g.com/categorie_accompagnements.htm",
-    # "https://www.750g.com/recettes-aperitifs/",
-    # "https://www.750g.com/recettes-bases/",
-    # "https://www.750g.com/recettes-boissons/",
-    # "https://www.750g.com/recettes-confiseries/",
-    # "https://www.750g.com/categorie_confitures.htm",
-    # "https://www.750g.com/recettes-desserts/biscuits/",
-    # "https://www.750g.com/recettes-pdg/",
-    # "https://www.750g.com/recettes-desserts/patisseries/",
-    # "https://www.750g.com/recettes-salades/",
-    # "https://www.750g.com/recettes-sauces/",
-    # "https://www.750g.com/recettes-potages/",
-    # "https://www.750g.com/recettes-desserts/tartes/",
-    # "https://www.750g.com/recettes-plats/",
-    # "https://www.750g.com/recettes-plats/traditionnels/",
-    # "https://www.750g.com/recettes-desserts/",
-    # "https://www.750g.com/recettes-entrees/",
+    "https://www.750g.com/recettes-aperitifs/",
+    "https://www.750g.com/recettes-bases/",
+    "https://www.750g.com/recettes-boissons/",
+    "https://www.750g.com/recettes-confiseries/",
+    "https://www.750g.com/categorie_confitures.htm",
+    "https://www.750g.com/recettes-desserts/biscuits/",
+    "https://www.750g.com/recettes-pdg/",
+    "https://www.750g.com/recettes-desserts/patisseries/",
+    "https://www.750g.com/recettes-salades/",
+    "https://www.750g.com/recettes-sauces/",
+    "https://www.750g.com/recettes-potages/",
+    "https://www.750g.com/recettes-desserts/tartes/",
+    "https://www.750g.com/recettes-plats/",
+    "https://www.750g.com/recettes-plats/traditionnels/",
+    "https://www.750g.com/recettes-desserts/",
+    "https://www.750g.com/recettes-entrees/",
 ]
 
 # fichier de sortie
@@ -125,7 +125,7 @@ def scrape_single_url(url, session):
 def crawl_all(start_urls, output_path=OUTPUT_FILE):
     session = requests.Session()
 
-    # Set global pour dédoublonner toutes catégories confondues
+    #set global pour dédoublonner toutes les catégories
     all_urls: set[str] = set()
 
     for idx, url in enumerate(start_urls, 1):
@@ -136,7 +136,6 @@ def crawl_all(start_urls, output_path=OUTPUT_FILE):
         logging.info(f"{len(new)} nouvelles. Total global : {len(all_urls)}")
         time.sleep(DELAY)
 
-    # Format attendu par scraper_750g_details.py
     output_data = {
         "total": len(all_urls),
         "all_recipe_urls": list(all_urls),
