@@ -1,3 +1,4 @@
+import base64
 import streamlit as st
 from pathlib import Path
 from langchain_core.messages import HumanMessage, AIMessage
@@ -10,7 +11,11 @@ chemin_image = DOSSIER_COURANT / "img" / "chefkiss.png"
 st.set_page_config(page_title="RAGoût Recettes", page_icon="👩‍🍳")
 col1, col2 = st.columns([1, 5])
 with col1:
-    st.image(str(chemin_image), use_container_width=True)
+    image_base64 = base64.b64encode(chemin_image.read_bytes()).decode()
+    st.markdown(
+        f'<img src="data:image/png;base64,{image_base64}" style="width:100%">',
+        unsafe_allow_html=True,
+    )
 with col2:
     st.title("RAGoût")
 
